@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import { type Product, type CartItem, type PaymentMethod, type Order, saveOrder, generateId } from '@/lib/store';
 import { Plus, Minus, Trash2, ShoppingCart, Weight, Hash, X, IndianRupee } from 'lucide-react';
 import PaymentModal from '@/components/PaymentModal';
@@ -14,10 +14,70 @@ export default function POS() {
   const [showPayment, setShowPayment] = useState(false);
   const [completedOrder, setCompletedOrder] = useState<Order | null>(null);
   const [isSavingOrder, setIsSavingOrder] = useState(false);
+  const paidAudioRef = useRef<HTMLAudioElement | null>(null);
+  const paidSoundUrl = `${import.meta.env.BASE_URL}paid.mp3`;
 
   const filteredProducts = products.filter((p) => p.name.toLowerCase().includes(search.toLowerCase()));
 
   const subtotal = cart.reduce((s, item) => s + item.total, 0);
+
+  const unlockPaidSound = useCallback(() => {
+    if (!paidAudioRef.current) {
+      const audio = new Audio(paidSoundUrl);
+      audio.preload = 'auto';
+      paidAudioRef.current = audio;
+    }
+
+    const audio = paidAudioRef.current;
+    if (!audio) return;
+
+    // Some browsers require a user-gesture-triggered play before future playback is allowed.
+    audio.muted = true;
+    void audio.play()
+      .then(() => {
+        audio.pause();
+        audio.currentTime = 0;
+        audio.muted = false;
+      })
+      .catch(() => {
+        audio.muted = false;
+      });
+  }, [paidSoundUrl]);
+
+  useEffect(() => {
+    const handleFirstInteraction = () => {
+      unlockPaidSound();
+      window.removeEventListener('pointerdown', handleFirstInteraction);
+      window.removeEventListener('keydown', handleFirstInteraction);
+      window.removeEventListener('touchstart', handleFirstInteraction);
+    };
+
+    window.addEventListener('pointerdown', handleFirstInteraction);
+    window.addEventListener('keydown', handleFirstInteraction);
+    window.addEventListener('touchstart', handleFirstInteraction);
+
+    return () => {
+      window.removeEventListener('pointerdown', handleFirstInteraction);
+      window.removeEventListener('keydown', handleFirstInteraction);
+      window.removeEventListener('touchstart', handleFirstInteraction);
+    };
+  }, [unlockPaidSound]);
+
+  const playPaidSound = useCallback(() => {
+    if (!paidAudioRef.current) {
+      const audio = new Audio(paidSoundUrl);
+      audio.preload = 'auto';
+      paidAudioRef.current = audio;
+    }
+
+    const audio = paidAudioRef.current;
+    if (!audio) return;
+
+    audio.currentTime = 0;
+    void audio.play().catch(() => {
+      // Ignore playback issues (for example if the browser still blocks autoplay).
+    });
+  }, [paidSoundUrl]);
 
   const addToCart = useCallback((product: Product) => {
     setCart((prev) => {
@@ -81,13 +141,14 @@ export default function POS() {
       setCart([]);
       setShowPayment(false);
       setCompletedOrder(order);
+      playPaidSound();
       toast.success('Order completed!');
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Failed to save order');
     } finally {
       setIsSavingOrder(false);
     }
-  }, [cart, subtotal]);
+  }, [cart, subtotal, playPaidSound]);
 
   return (
     <div className="flex flex-col lg:flex-row gap-6 min-h-[calc(100vh-4rem)]">

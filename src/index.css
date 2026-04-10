@@ -61,6 +61,23 @@
 }
 
 @layer base {
+  html.font-high {
+    font-size: 18px;
+  }
+
+  html.font-high body {
+    font-weight: 500;
+  }
+
+  html.font-high h1,
+  html.font-high h2,
+  html.font-high h3,
+  html.font-high h4,
+  html.font-high h5,
+  html.font-high h6 {
+    font-weight: 800;
+  }
+
   * {
     @apply border-border;
   }

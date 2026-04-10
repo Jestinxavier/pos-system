@@ -61,9 +61,9 @@ export default function InvoiceModal({ order, onClose }: Props) {
               <div key={i} className="flex justify-between text-sm">
                 <div>
                   <span className="text-foreground">{item.product.name}</span>
-                  <span className="text-muted-foreground ml-1">
-                    × {item.mode === 'quantity' ? `${item.quantity} pc` : `${item.weight} ${item.product.unit}`}
-                  </span>
+                  {getInvoiceItemUnitLabel(item) && (
+                    <span className="text-muted-foreground ml-1">× {getInvoiceItemUnitLabel(item)}</span>
+                  )}
                 </div>
                 <span className="font-medium text-foreground">₹{item.total.toFixed(2)}</span>
               </div>
@@ -131,8 +131,10 @@ function generateInvoiceText(order: Order): string {
   text += `Order: #${order.id}\n`;
   text += `─────────────────\n`;
   order.items.forEach((item) => {
-    const qty = item.mode === 'quantity' ? `${item.quantity} pc` : `${item.weight} ${item.product.unit}`;
-    text += `${item.product.name} × ${qty} = ₹${item.total.toFixed(2)}\n`;
+    const unitLabel = getInvoiceItemUnitLabel(item);
+    text += unitLabel
+      ? `${item.product.name} × ${unitLabel} = ₹${item.total.toFixed(2)}\n`
+      : `${item.product.name} = ₹${item.total.toFixed(2)}\n`;
   });
   text += `─────────────────\n`;
   text += `TOTAL: ₹${order.subtotal.toFixed(2)}\n`;
@@ -143,4 +145,14 @@ function generateInvoiceText(order: Order): string {
   if (order.change > 0) text += `CHANGE: ₹${order.change.toFixed(2)}\n`;
   text += `─────────────────\nThank you! 🙏`;
   return text;
+}
+
+function getInvoiceItemUnitLabel(item: Order["items"][number]): string | null {
+  if (item.mode === "quantity") {
+    return item.quantity > 0 ? `${item.quantity} pc` : null;
+  }
+  if (item.mode === "weight") {
+    return item.weight > 0 ? `${item.weight} ${item.product.unit}` : null;
+  }
+  return null;
 }
