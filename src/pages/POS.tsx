@@ -6,6 +6,7 @@ import InvoiceModal from '@/components/InvoiceModal';
 import NumericKeypadModal from '@/components/NumericKeypadModal';
 import { toast } from 'sonner';
 import { useData } from '@/lib/data';
+import { buildPrintPayload, printReceipt } from '@/lib/posbridge';
 
 export default function POS() {
   const { products, loadingProducts, productsError } = useData();
@@ -138,11 +139,20 @@ export default function POS() {
     try {
       setIsSavingOrder(true);
       await saveOrder(order);
+
+      const printResult = await printReceipt(buildPrintPayload(order));
+
       setCart([]);
       setShowPayment(false);
       setCompletedOrder(order);
       playPaidSound();
-      toast.success('Order completed!');
+
+      if (printResult.ok) {
+        toast.success('Order completed and receipt printed!');
+      } else {
+        const errorMessage = typeof printResult.error === 'string' ? printResult.error : 'POS Bridge not running on this machine';
+        toast.warning(`Order completed, but print failed: ${errorMessage}`);
+      }
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Failed to save order');
     } finally {
