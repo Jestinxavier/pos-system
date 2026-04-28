@@ -1,6 +1,6 @@
 import type { CartItem, Order } from '@/lib/store';
 
-const TIMEOUT_MS = 7000;
+const TIMEOUT_MS = 2000;
 const ENV_BRIDGE_URL = (import.meta.env.VITE_POS_BRIDGE_URL as string | undefined)?.trim();
 const DEFAULT_BRIDGE_URLS = ['https://localhost:3000', 'http://localhost:3000'];
 
@@ -40,7 +40,7 @@ function bridgeCandidates(): string[] {
   }
 
   if (preferredBridgeUrl) {
-    return [preferredBridgeUrl, ...DEFAULT_BRIDGE_URLS.filter((url) => url !== preferredBridgeUrl)];
+    return [preferredBridgeUrl];
   }
 
   return DEFAULT_BRIDGE_URLS;
@@ -150,3 +150,8 @@ export function openCashDrawer(): Promise<BridgeResponse> {
     method: 'POST',
   });
 }
+
+// Auto-probe on startup to lock in the preferred bridge URL quickly
+setTimeout(() => {
+  getBridgeStatus().catch(() => {});
+}, 100);

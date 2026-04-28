@@ -1,6 +1,7 @@
-import { X, Download, Share2 } from 'lucide-react';
+import { X, Download, Share2, Printer } from 'lucide-react';
 import type { Order } from '@/lib/store';
 import { toast } from 'sonner';
+import { buildPrintPayload, printReceipt } from '@/lib/posbridge';
 
 interface Props {
   order: Order;
@@ -30,6 +31,19 @@ export default function InvoiceModal({ order, onClose }: Props) {
     a.click();
     URL.revokeObjectURL(url);
     toast.success('Invoice downloaded!');
+  };
+
+  const handlePrint = async () => {
+    const toastId = toast.loading('Printing receipt...');
+    const payload = buildPrintPayload(order);
+    payload.openDrawer = false; // Don't pop the cash drawer on reprint
+    const result = await printReceipt(payload);
+    if (result.ok) {
+      toast.success('Receipt printed!', { id: toastId });
+    } else {
+      const errorMessage = typeof result.error === 'string' ? result.error : 'POS Bridge not running on this machine';
+      toast.error(`Print failed: ${errorMessage}`, { id: toastId });
+    }
   };
 
   return (
@@ -105,6 +119,12 @@ export default function InvoiceModal({ order, onClose }: Props) {
 
           {/* Actions */}
           <div className="flex gap-2">
+            <button
+              onClick={handlePrint}
+              className="flex-1 py-2.5 rounded-lg bg-emerald-500/10 text-emerald-600 border border-emerald-200 text-sm font-medium flex items-center justify-center gap-2 hover:bg-emerald-500/20"
+            >
+              <Printer size={16} /> Print
+            </button>
             <button
               onClick={downloadInvoice}
               className="flex-1 py-2.5 rounded-lg bg-muted text-foreground text-sm font-medium flex items-center justify-center gap-2 hover:bg-accent"

@@ -138,9 +138,10 @@ export default function POS() {
     };
     try {
       setIsSavingOrder(true);
-      await saveOrder(order);
-
-      const printResult = await printReceipt(buildPrintPayload(order));
+      const [, printResult] = await Promise.all([
+        saveOrder(order),
+        printReceipt(buildPrintPayload(order))
+      ]);
 
       setCart([]);
       setShowPayment(false);

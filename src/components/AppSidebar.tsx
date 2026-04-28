@@ -96,7 +96,20 @@ export default function AppSidebar() {
           {collapsed ? 'Out' : 'Sign out'}
         </Button>
         {!collapsed && (
-          <p className="text-[10px] text-primary-foreground/40">© 2026 St.Xavier Oils</p>
+          <div className="text-[10px] text-primary-foreground/40 space-y-1">
+            <p>© 2026 St.Xavier Oils</p>
+            <p>
+              Developed by{' '}
+              <a
+                href="https://dynamicpotfoliyo.web.app/"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="hover:text-primary-foreground transition-colors hover:underline"
+              >
+                Jestin xavier
+              </a>
+            </p>
+          </div>
         )}
       </SidebarFooter>
     </Sidebar>
