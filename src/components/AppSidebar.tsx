@@ -1,5 +1,5 @@
 import { NavLink as RouterNavLink, useLocation } from 'react-router-dom';
-import { LayoutDashboard, ShoppingCart, Package, ClipboardList, Settings } from 'lucide-react';
+import { LayoutDashboard, ShoppingCart, Package, ClipboardList, Settings, Calculator as CalculatorIcon } from 'lucide-react';
 import { NavLink } from '@/components/NavLink';
 import { Button } from '@/components/ui/button';
 import {
@@ -22,6 +22,7 @@ const navItems = [
   { to: '/pos', icon: ShoppingCart, label: 'Billing (POS)' },
   { to: '/products', icon: Package, label: 'Products' },
   { to: '/orders', icon: ClipboardList, label: 'Orders' },
+  { to: '/calculator', icon: CalculatorIcon, label: 'Calculator' },
   { to: '/settings', icon: Settings, label: 'Settings' },
 ];
 

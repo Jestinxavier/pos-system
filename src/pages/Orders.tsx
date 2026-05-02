@@ -5,24 +5,33 @@ import InvoiceModal from '@/components/InvoiceModal';
 import { Receipt, CalendarDays } from 'lucide-react';
 import { Calendar } from '@/components/ui/calendar';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 
 export default function Orders() {
   const { orders, loadingOrders, ordersError } = useData();
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
   const [selectedDate, setSelectedDate] = useState<Date | undefined>(undefined);
+  const [orderIdQuery, setOrderIdQuery] = useState('');
   const [visibleCount, setVisibleCount] = useState(60);
 
   const filteredOrders = useMemo(() => {
-    if (!selectedDate) return orders;
+    const query = orderIdQuery.trim().toLowerCase();
     return orders.filter((order) => {
-      const createdAt = new Date(order.createdAt);
-      return (
-        createdAt.getFullYear() === selectedDate.getFullYear() &&
-        createdAt.getMonth() === selectedDate.getMonth() &&
-        createdAt.getDate() === selectedDate.getDate()
-      );
+      const matchesDate = selectedDate
+        ? (() => {
+            const createdAt = new Date(order.createdAt);
+            return (
+              createdAt.getFullYear() === selectedDate.getFullYear() &&
+              createdAt.getMonth() === selectedDate.getMonth() &&
+              createdAt.getDate() === selectedDate.getDate()
+            );
+          })()
+        : true;
+
+      const matchesOrderId = query ? order.id.toLowerCase().includes(query) : true;
+      return matchesDate && matchesOrderId;
     });
-  }, [orders, selectedDate]);
+  }, [orders, selectedDate, orderIdQuery]);
 
   useEffect(() => {
     setVisibleCount(60);
@@ -70,6 +79,14 @@ export default function Orders() {
 
       <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_320px]">
         <div className="space-y-4">
+          <div className="bg-card rounded-xl shadow-card p-3">
+            <Input
+              value={orderIdQuery}
+              onChange={(e) => setOrderIdQuery(e.target.value)}
+              placeholder="Search by Order ID..."
+              className="h-10"
+            />
+          </div>
           {loadingOrders ? (
             <div className="text-sm text-muted-foreground py-12">Loading orders...</div>
           ) : ordersError ? (
@@ -122,11 +139,11 @@ export default function Orders() {
               ))}
               {hasMore && (
                 <div className="pt-2">
-                  <Button variant="outline" onClick={() => setVisibleCount((prev) => prev + 60)}>
-                    Load 60 More Orders
-                  </Button>
-                </div>
-              )}
+              <Button variant="outline" onClick={() => setVisibleCount((prev) => prev + 60)}>
+                Load 60 More Orders
+              </Button>
+            </div>
+          )}
             </>
           )}
         </div>
@@ -145,6 +162,14 @@ export default function Orders() {
               disabled={!selectedDate}
             >
               Clear Date Filter
+            </Button>
+            <Button
+              variant="outline"
+              className="w-full"
+              onClick={() => setOrderIdQuery('')}
+              disabled={!orderIdQuery}
+            >
+              Clear Order ID Search
             </Button>
           </div>
         </div>

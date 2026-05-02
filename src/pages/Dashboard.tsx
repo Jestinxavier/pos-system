@@ -2,8 +2,11 @@ import { useMemo, useState } from 'react';
 import { type Order } from '@/lib/store';
 import { useData } from '@/lib/data';
 import KPICard from '@/components/KPICard';
-import { IndianRupee, ShoppingBag, TrendingUp, Banknote, Smartphone, CreditCard } from 'lucide-react';
+import { IndianRupee, ShoppingBag, TrendingUp, Banknote, Smartphone, CreditCard, Printer } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
+import { Button } from '@/components/ui/button';
+import { printReceipt } from '@/lib/posbridge';
+import { toast } from 'sonner';
 
 type Period = 'today' | 'week' | 'month' | 'all';
 
@@ -30,6 +33,7 @@ export default function Dashboard() {
   const [period, setPeriod] = useState<Period>('today');
   const { orders: allOrders, loadingOrders, ordersError } = useData();
   const orders = useMemo(() => filterByPeriod(allOrders, period), [allOrders, period]);
+  const todayOrders = useMemo(() => filterByPeriod(allOrders, 'today'), [allOrders]);
 
   if (loadingOrders) {
     return (
@@ -47,6 +51,22 @@ export default function Dashboard() {
   const cashTotal = orders.reduce((s, o) => s + o.payments.filter((p) => p.method === 'cash').reduce((a, p) => a + p.amount, 0), 0);
   const upiTotal = orders.reduce((s, o) => s + o.payments.filter((p) => p.method === 'upi').reduce((a, p) => a + p.amount, 0), 0);
   const cardTotal = orders.reduce((s, o) => s + o.payments.filter((p) => p.method === 'card').reduce((a, p) => a + p.amount, 0), 0);
+  const todayCashPayments = todayOrders.flatMap((o) => o.payments.filter((p) => p.method === 'cash'));
+  const todayUpiPayments = todayOrders.flatMap((o) => o.payments.filter((p) => p.method === 'upi'));
+  const todayCardPayments = todayOrders.flatMap((o) => o.payments.filter((p) => p.method === 'card'));
+  const todayCashTotal = todayCashPayments.reduce((sum, p) => sum + p.amount, 0);
+  const todayUpiTotal = todayUpiPayments.reduce((sum, p) => sum + p.amount, 0);
+  const todayCardTotal = todayCardPayments.reduce((sum, p) => sum + p.amount, 0);
+  const todayMiniStatementRows = todayOrders.flatMap((order) =>
+    order.payments.map((payment, index) => ({
+      key: `${order.id}-${index}`,
+      orderId: order.id,
+      time: new Date(order.createdAt).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }),
+      method: formatPaymentMethod(payment.method),
+      amount: payment.amount,
+    }))
+  );
+  const todayGrandTotal = todayMiniStatementRows.reduce((sum, row) => sum + row.amount, 0);
 
   const paymentData = [
     { name: 'Cash', value: cashTotal },
@@ -74,6 +94,116 @@ export default function Dashboard() {
     { key: 'month', label: 'This Month' },
     { key: 'all', label: 'All Time' },
   ];
+
+  const handlePrintMiniStatement = async () => {
+    const bridgePayload = {
+      invoiceNo: `STM-${new Date().toISOString().slice(0, 10)}`,
+      cashier: 'Counter',
+      items: todayMiniStatementRows.map((row) => ({
+        name: `${row.time} ${row.method} #${row.orderId.slice(-6)}`,
+        qty: 1,
+        price: row.amount,
+      })),
+      subtotal: todayGrandTotal,
+      total: todayGrandTotal,
+      paymentMethod: 'MIXED',
+      amountPaid: todayGrandTotal,
+      change: 0,
+      openDrawer: false,
+      note: 'TODAY MINI STATEMENT',
+    };
+
+    const toastId = toast.loading('Printing mini statement...');
+    const bridgeResult = await printReceipt(bridgePayload);
+    if (bridgeResult.ok) {
+      toast.success('Mini statement printed to label printer.', { id: toastId });
+      return;
+    }
+
+    toast.warning('POS Bridge unavailable. Opening browser print preview instead.', { id: toastId });
+
+    const printWindow = window.open('', '_blank', 'width=420,height=720');
+    if (!printWindow) return;
+
+    const todayLabel = new Date().toLocaleDateString('en-IN', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+    });
+
+    const rowsHtml =
+      todayMiniStatementRows.length === 0
+        ? `<tr><td colspan="4" style="text-align:center;padding:8px 0;">No transactions today</td></tr>`
+        : todayMiniStatementRows
+            .map(
+              (row) => `
+              <tr>
+                <td>${row.orderId.slice(-6)}</td>
+                <td>${row.time}</td>
+                <td>${row.method}</td>
+                <td style="text-align:right;">₹${row.amount.toFixed(2)}</td>
+              </tr>
+            `
+            )
+            .join('');
+
+    const html = `
+      <!doctype html>
+      <html>
+      <head>
+        <meta charset="utf-8" />
+        <title>Today Mini Statement</title>
+        <style>
+          @page { size: 80mm auto; margin: 6mm; }
+          body { font-family: Arial, sans-serif; margin: 0; color: #111; }
+          .label { width: 100%; max-width: 80mm; margin: 0 auto; font-size: 12px; }
+          h1 { font-size: 14px; margin: 0; text-align: center; }
+          .sub { text-align: center; margin: 2px 0 8px; font-size: 11px; }
+          .line { border-top: 1px dashed #444; margin: 6px 0; }
+          table { width: 100%; border-collapse: collapse; }
+          th, td { font-size: 11px; padding: 4px 0; vertical-align: top; }
+          th { text-align: left; border-bottom: 1px dashed #444; }
+          .total { font-weight: 700; font-size: 12px; display: flex; justify-content: space-between; margin-top: 8px; }
+          .foot { margin-top: 8px; text-align: center; font-size: 10px; }
+        </style>
+      </head>
+      <body>
+        <div class="label">
+          <h1>ST.XAVIER OILS</h1>
+          <div class="sub">Today Mini Statement - ${todayLabel}</div>
+          <div class="line"></div>
+          <table>
+            <thead>
+              <tr>
+                <th>Order</th>
+                <th>Time</th>
+                <th>Mode</th>
+                <th style="text-align:right;">Amount</th>
+              </tr>
+            </thead>
+            <tbody>${rowsHtml}</tbody>
+          </table>
+          <div class="line"></div>
+          <div class="total">
+            <span>Grand Total</span>
+            <span>₹${todayGrandTotal.toFixed(2)}</span>
+          </div>
+          <div class="foot">Generated from Dashboard</div>
+        </div>
+        <script>
+          window.onload = () => {
+            window.print();
+            window.onafterprint = () => window.close();
+          };
+        </script>
+      </body>
+      </html>
+    `;
+
+    printWindow.document.open();
+    printWindow.document.write(html);
+    printWindow.document.close();
+  };
 
   return (
     <div className="space-y-6">
@@ -103,6 +233,31 @@ export default function Dashboard() {
         <KPICard icon={ShoppingBag} title="Total Orders" value={totalOrders.toString()} subtitle="completed" />
         <KPICard icon={TrendingUp} title="Avg Order Value" value={`₹${avgOrder.toFixed(0)}`} variant="gold" />
         <KPICard icon={Banknote} title="Cash Collection" value={`₹${cashTotal.toLocaleString('en-IN')}`} />
+      </div>
+
+      {/* Today transaction KPIs */}
+      <div className="space-y-2">
+        <h3 className="font-display font-semibold text-foreground">Today Transactions (Payment Mode)</h3>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          <KPICard
+            icon={Smartphone}
+            title="UPI / GPay"
+            value={`₹${todayUpiTotal.toLocaleString('en-IN')}`}
+            subtitle={`${todayUpiPayments.length} transactions`}
+          />
+          <KPICard
+            icon={Banknote}
+            title="Cash"
+            value={`₹${todayCashTotal.toLocaleString('en-IN')}`}
+            subtitle={`${todayCashPayments.length} transactions`}
+          />
+          <KPICard
+            icon={CreditCard}
+            title="Card / Bank"
+            value={`₹${todayCardTotal.toLocaleString('en-IN')}`}
+            subtitle={`${todayCardPayments.length} transactions`}
+          />
+        </div>
       </div>
 
       {/* Payment & Product charts */}
@@ -152,8 +307,65 @@ export default function Dashboard() {
           )}
         </div>
       </div>
+
+      {/* Today mini statement */}
+      <div className="bg-card rounded-xl shadow-card p-5 space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+          <div>
+            <h3 className="font-display font-semibold text-foreground">Today Mini Statement</h3>
+            <p className="text-sm text-muted-foreground">Order-wise payment mode, time and amount (label print format).</p>
+          </div>
+          <Button onClick={handlePrintMiniStatement} className="gap-2">
+            <Printer size={16} />
+            Print Mini Statement
+          </Button>
+        </div>
+
+        <div className="overflow-x-auto rounded-lg border border-border">
+          <table className="w-full min-w-[560px] text-sm">
+            <thead className="bg-muted/60">
+              <tr>
+                <th className="text-left px-3 py-2 font-medium">Order</th>
+                <th className="text-left px-3 py-2 font-medium">Time</th>
+                <th className="text-left px-3 py-2 font-medium">Payment Mode</th>
+                <th className="text-right px-3 py-2 font-medium">Amount</th>
+              </tr>
+            </thead>
+            <tbody>
+              {todayMiniStatementRows.length === 0 ? (
+                <tr>
+                  <td colSpan={4} className="px-3 py-6 text-center text-muted-foreground">
+                    No transactions for today yet
+                  </td>
+                </tr>
+              ) : (
+                todayMiniStatementRows.map((row) => (
+                  <tr key={row.key} className="border-t border-border">
+                    <td className="px-3 py-2">{row.orderId}</td>
+                    <td className="px-3 py-2">{row.time}</td>
+                    <td className="px-3 py-2">{row.method}</td>
+                    <td className="px-3 py-2 text-right font-medium">₹{row.amount.toFixed(2)}</td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+            <tfoot>
+              <tr className="border-t border-border bg-muted/40">
+                <td colSpan={3} className="px-3 py-2 text-right font-semibold">Grand Total Today</td>
+                <td className="px-3 py-2 text-right font-bold">₹{todayGrandTotal.toFixed(2)}</td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+      </div>
     </div>
   );
+}
+
+function formatPaymentMethod(method: 'cash' | 'upi' | 'card') {
+  if (method === 'upi') return 'UPI / GPay';
+  if (method === 'card') return 'Card / Bank';
+  return 'Cash';
 }
 
 function PaymentRow({ icon: Icon, label, amount, color }: { icon: typeof Banknote; label: string; amount: number; color: string }) {
